@@ -1,0 +1,9 @@
+result/
+ResNeXt.pytorch-master
+model/
+data/
+cxy/
+*.yaml
+saved/
+graph/
+
