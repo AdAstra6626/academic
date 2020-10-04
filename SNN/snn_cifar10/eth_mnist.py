@@ -4,13 +4,14 @@ import torch
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
-
+from torch.utils.data import DataLoader,Dataset
 from torchvision import transforms
 from tqdm import tqdm
 
 from time import time as t
 
-from bindsnet.datasets import MNIST
+
+from bindsnet.datasets import CIFAR10 
 from bindsnet.encoding import PoissonEncoder
 
 from bindsnet.models import DiehlAndCook2015
@@ -86,14 +87,14 @@ start_intensity = intensity
 
 # Build network.
 network = DiehlAndCook2015(
-    n_inpt=784,
+    n_inpt=1024,
     n_neurons=n_neurons,
     exc=exc,
     inh=inh,
     dt=dt,
     norm=78.4,
     theta_plus=theta_plus,
-    inpt_shape=(1, 28, 28),
+    inpt_shape=(1, 32, 32),
 )
 
 # Directs network to GPU
@@ -102,21 +103,23 @@ if gpu:
 #================test code===============
 input_exc_weights = network.connections[("X", "Ae")].w
 square_weights = get_square_weights(
-    input_exc_weights.view(784, n_neurons), n_sqrt, 28
+    input_exc_weights.view(1024, n_neurons), n_sqrt, 32
 )
 weights_im = None
 weights_im = plot_weights(square_weights, im=weights_im)
 #========================================
 #%%
-# Load MNIST data.
-train_dataset = MNIST(
+w = 32
+h = 32
+# Load cifar 10 data.
+train_dataset = CIFAR10(
     PoissonEncoder(time=time, dt=dt),
     None,
-    root=os.path.join("..", "..", "data", "MNIST"),
-    download=True,
+    root=os.path.join("..", "..", "data", "CIFAR10"),
+    download=False,
     train=True,
     transform=transforms.Compose(
-        [transforms.ToTensor(), transforms.Lambda(lambda x: x * intensity)]
+        [transforms.Grayscale(num_output_channels=1), transforms.ToTensor()]
     ),
 )
 
@@ -173,7 +176,7 @@ for epoch in range(n_epochs):
 
     for step, batch in enumerate(tqdm(dataloader)):
         # Get next input sample.
-        inputs = {"X": batch["encoded_image"].view(int(time/dt), 1, 1, 28, 28)}
+        inputs = {"X": batch["encoded_image"].view(int(time/dt), 1, 1, w, h)}
         if gpu:
             inputs = {k: v.cuda() for k, v in inputs.items()}
 
@@ -246,11 +249,11 @@ for epoch in range(n_epochs):
             break
         # Optionally plot various simulation information.
         if plot:
-            image = batch["image"].view(28, 28)
-            inpt = inputs["X"].view(time, 784).sum(0).view(28, 28)
+            image = batch["image"].view(w, h)
+            inpt = inputs["X"].view(time, w * h).sum(0).view(w, h)
             input_exc_weights = network.connections[("X", "Ae")].w
             square_weights = get_square_weights(
-                input_exc_weights.view(784, n_neurons), n_sqrt, 28
+                input_exc_weights.view(w * h, n_neurons), n_sqrt, w
             )
             square_assignments = get_square_assignments(assignments, n_sqrt)
             spikes_ = {layer: spikes[layer].get("s") for layer in spikes}
@@ -260,7 +263,7 @@ for epoch in range(n_epochs):
             )
             spike_ims, spike_axes = plot_spikes(spikes_, ims=spike_ims, axes=spike_axes)
             weights_im = plot_weights(square_weights, im=None)
-            save_path = '../img/'
+            save_path = '../../result/snn_cifar10/'
             plt.savefig(save_path + '{}_weights.jpg'.format(str(step)))
             assigns_im = plot_assignments(square_assignments, im=None)
             perf_ax = plot_performance(accuracy, ax=None)
@@ -274,68 +277,4 @@ for epoch in range(n_epochs):
 
 print("Progress: %d / %d (%.4f seconds)" % (epoch + 1, n_epochs, t() - start))
 print("Training complete.\n")
-#%%
-
-# Load MNIST data.
-test_dataset = MNIST(
-    PoissonEncoder(time=time, dt=dt),
-    None,
-    root=os.path.join("..", "..", "data", "MNIST"),
-    download=True,
-    train=False,
-    transform=transforms.Compose(
-        [transforms.ToTensor(), transforms.Lambda(lambda x: x * intensity)]
-    ),
-)
-
-# Sequence of accuracy estimates.
-accuracy = {"all": 0, "proportion": 0}
-
-# Record spikes during the simulation.
-spike_record = torch.zeros(1, int(time/dt), n_neurons)
-
-# Train the network.
-print("\nBegin testing\n")
-network.train(mode=False)
-start = t()
-
-for step, batch in enumerate(tqdm(test_dataset)):
-    # Get next input sample.
-    inputs = {"X": batch["encoded_image"].view(int(time/dt), 1, 1, 28, 28)}
-    if gpu:
-        inputs = {k: v.cuda() for k, v in inputs.items()}
-
-    # Run the network on the input.
-    network.run(inputs=inputs, time=time, input_time_dim=1)
-
-    # Add to spikes recording.
-    spike_record[0] = spikes["Ae"].get("s").squeeze()
-
-    # Convert the array of labels into a tensor
-    label_tensor = torch.tensor(batch["label"])
-
-    # Get network predictions.
-    all_activity_pred = all_activity(
-        spikes=spike_record, assignments=assignments, n_labels=n_classes
-    )
-    proportion_pred = proportion_weighting(
-        spikes=spike_record,
-        assignments=assignments,
-        proportions=proportions,
-        n_labels=n_classes,
-    )
-    
-
-    # Compute network accuracy according to available classification strategies.
-    accuracy["all"] += float(torch.sum(label_tensor.long() == all_activity_pred).item())
-    accuracy["proportion"] += float(torch.sum(label_tensor.long() == proportion_pred).item())
-
-    network.reset_state_variables()  # Reset state variables.
-
-print("\nAll activity accuracy: %.2f" % (accuracy["all"] / test_dataset.test_labels.shape[0]))
-print("Proportion weighting accuracy: %.2f \n" % ( accuracy["proportion"] / test_dataset.test_labels.shape[0]))
-
-
-print("Progress: %d / %d (%.4f seconds)" % (epoch + 1, n_epochs, t() - start))
-print("Testing complete.\n")
 # %%
