@@ -91,9 +91,8 @@ network = DiehlAndCook2015(
 )
 
 # Directs network to GPU
-if gpu:
-    device = torch.device("cuda:8")
-    network.to(device)
+device = torch.device("cuda:8")
+network.to(device)
 
 #%%
 # Load CIFAR10 data.
@@ -163,7 +162,7 @@ for epoch in range(n_epochs):
         # Get next input sample.
         inputs = {"X": batch["encoded_image"].view(int(time/dt), 1, 1, w, w)}
         if gpu:
-            inputs = {k: v.cuda() for k, v in inputs.items()}
+            inputs = {k: v.to(device) for k, v in inputs.items()}
 
         if step % update_interval == 0 and step > 0:
             # Convert the array of labels into a tensor
