@@ -46,7 +46,7 @@ parser.add_argument("--train", dest="train", action="store_true")
 parser.add_argument("--test", dest="train", action="store_false")
 parser.add_argument("--plot", dest="plot", action="store_true")
 parser.add_argument("--gpu", dest="gpu", action="store_true")
-parser.set_defaults(plot=False, gpu=False)
+parser.set_defaults(plot=False, gpu=True)
 
 args = parser.parse_known_args()[0]
 
@@ -174,7 +174,7 @@ for epoch in range(n_epochs):
         train_dataset, batch_size=1, shuffle=True, num_workers=n_workers, pin_memory=gpu
     )
 
-    for step, batch in enumerate(tqdm(dataloader)):
+    for step, batch in dataloader:
         # Get next input sample.
         inputs = {"X": batch["encoded_image"].view(int(time/dt), 1, 1, w, h)}
         if gpu:
