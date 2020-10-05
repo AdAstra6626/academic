@@ -92,7 +92,8 @@ network = DiehlAndCook2015(
 
 # Directs network to GPU
 if gpu:
-    network.to("cuda")
+    device = torch.device("cuda:8")
+    network.to(device)
 
 #%%
 # Load CIFAR10 data.
@@ -103,7 +104,7 @@ train_dataset = CIFAR10(
     download=True,
     train=True,
     transform=transforms.Compose(
-        [transforms.ToTensor(), transforms.Lambda(lambda x: x * intensity)]
+        [transforms.Grayscale(num_output_channels=1), transforms.ToTensor()]
     ),
 )
 
