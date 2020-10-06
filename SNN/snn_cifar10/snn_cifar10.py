@@ -3,29 +3,22 @@ import os
 import torch
 import argparse
 import numpy as np
+import matplotlib
+matplotlib.use("AGG")
 import matplotlib.pyplot as plt
-from torch.utils.data import DataLoader,Dataset
+#from snn_cifar10_utils import plot_weights
 from torchvision import transforms
 from tqdm import tqdm
 
 from time import time as t
 
-
-from bindsnet.datasets import CIFAR10 
+from bindsnet.datasets import CIFAR10
 from bindsnet.encoding import PoissonEncoder
 
 from bindsnet.models import DiehlAndCook2015
 from bindsnet.network.monitors import Monitor
 from bindsnet.utils import get_square_weights, get_square_assignments
 from bindsnet.evaluation import all_activity, proportion_weighting, assign_labels
-from bindsnet.analysis.plotting import (
-    plot_input,
-    plot_spikes,
-    plot_weights,
-    plot_assignments,
-    plot_performance,
-    plot_voltages,
-)
 
 
 parser = argparse.ArgumentParser()
@@ -66,7 +59,7 @@ update_interval = args.update_interval
 train = args.train
 plot = True
 gpu = args.gpu
-
+w = 32
 # Sets up Gpu use
 if gpu and torch.cuda.is_available():
     torch.cuda.manual_seed_all(seed)
@@ -87,36 +80,27 @@ start_intensity = intensity
 
 # Build network.
 network = DiehlAndCook2015(
-    n_inpt=1024,
+    n_inpt=w * w,
     n_neurons=n_neurons,
     exc=exc,
     inh=inh,
     dt=dt,
     norm=78.4,
     theta_plus=theta_plus,
-    inpt_shape=(1, 32, 32),
+    inpt_shape=(1, w, w),
 )
 
 # Directs network to GPU
-if gpu:
-    network.to("cuda")
-#================test code===============
-input_exc_weights = network.connections[("X", "Ae")].w
-square_weights = get_square_weights(
-    input_exc_weights.view(1024, n_neurons), n_sqrt, 32
-)
-weights_im = None
-weights_im = plot_weights(square_weights, im=weights_im)
-#========================================
+device = torch.device("cuda:8")
+network.to(device)
+
 #%%
-w = 32
-h = 32
-# Load cifar 10 data.
+# Load CIFAR10 data.
 train_dataset = CIFAR10(
     PoissonEncoder(time=time, dt=dt),
     None,
     root=os.path.join("..", "..", "data", "CIFAR10"),
-    download=False,
+    download=True,
     train=True,
     transform=transforms.Compose(
         [transforms.Grayscale(num_output_channels=1), transforms.ToTensor()]
@@ -173,12 +157,12 @@ for epoch in range(n_epochs):
     dataloader = torch.utils.data.DataLoader(
         train_dataset, batch_size=1, shuffle=True, num_workers=n_workers, pin_memory=gpu
     )
-
-    for step, batch in dataloader:
+    print(len(dataloader))
+    for step, batch in enumerate(tqdm(dataloader)):
         # Get next input sample.
-        inputs = {"X": batch["encoded_image"].view(int(time/dt), 1, 1, w, h)}
+        inputs = {"X": batch["encoded_image"].view(int(time/dt), 1, 1, w, w)}
         if gpu:
-            inputs = {k: v.cuda() for k, v in inputs.items()}
+            inputs = {k: v.to(device) for k, v in inputs.items()}
 
         if step % update_interval == 0 and step > 0:
             # Convert the array of labels into a tensor
@@ -249,27 +233,16 @@ for epoch in range(n_epochs):
             break
         # Optionally plot various simulation information.
         if plot:
-            image = batch["image"].view(w, h)
-            inpt = inputs["X"].view(time, w * h).sum(0).view(w, h)
             input_exc_weights = network.connections[("X", "Ae")].w
             square_weights = get_square_weights(
-                input_exc_weights.view(w * h, n_neurons), n_sqrt, w
+                input_exc_weights.view(w * w, n_neurons), n_sqrt, w
             )
-            square_assignments = get_square_assignments(assignments, n_sqrt)
-            spikes_ = {layer: spikes[layer].get("s") for layer in spikes}
-            voltages = {"Ae": exc_voltages, "Ai": inh_voltages}
-            inpt_axes, inpt_ims = plot_input(
-                image, inpt, label=batch["label"], axes=inpt_axes, ims=inpt_ims
-            )
-            spike_ims, spike_axes = plot_spikes(spikes_, ims=spike_ims, axes=spike_axes)
-            weights_im = plot_weights(square_weights, im=None)
+            print(type(square_weights))
+            print(square_weights.shape)
+            plt.matshow(square_weights)
             save_path = '../../result/snn_cifar10/'
             plt.savefig(save_path + '{}_weights.jpg'.format(str(step)))
-            assigns_im = plot_assignments(square_assignments, im=None)
-            perf_ax = plot_performance(accuracy, ax=None)
-            voltage_ims, voltage_axes = plot_voltages(
-                voltages, plot_type="line"
-            )
+            plt.cla()
 
             plt.pause(1e-8)
 
