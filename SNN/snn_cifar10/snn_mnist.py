@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from time import time as t
 
-from bindsnet.datasets import MNIST
+from bindsnet.datasets import MNIST, CIFAR10
 from bindsnet.encoding import PoissonEncoder
 
 from bindsnet.models import DiehlAndCook2015
@@ -90,23 +90,29 @@ network = DiehlAndCook2015(
 )
 
 # Directs network to GPU
-device = torch.device("cuda:8")
+device = torch.device("cuda:0")
 network.to(device)
 
 
 #%%
-# Load MNIST data.
-train_dataset = MNIST(
+
+train_dataset = CIFAR10(
     PoissonEncoder(time=time, dt=dt),
     None,
-    root=os.path.join("..", "..", "data", "MNIST"),
+    root=os.path.join("..", "..", "data", "CIFAR10"),
     download=True,
     train=True,
     transform=transforms.Compose(
-        [transforms.ToTensor(), transforms.Lambda(lambda x: x * intensity)]
+        #[transforms.Grayscale(num_output_channels=1), transforms.ToTensor(),transforms.Lambda(lambda x: x * intensity)]
+        [transforms.Grayscale(num_output_channels=1), transforms.ToTensor(),transforms.Lambda(lambda x: x * intensity)]
     ),
 )
 
+dataloader = torch.utils.data.DataLoader(
+        train_dataset, batch_size=1, shuffle=True, num_workers=n_workers, pin_memory=gpu
+    )
+print(iter(dataloader).next()['image'].shape)
+#%%
 # Record spikes during the simulation.
 spike_record = torch.zeros(update_interval, int(time/dt), n_neurons)
 

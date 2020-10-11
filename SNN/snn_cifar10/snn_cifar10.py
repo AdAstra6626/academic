@@ -103,7 +103,8 @@ train_dataset = CIFAR10(
     download=True,
     train=True,
     transform=transforms.Compose(
-        [transforms.Grayscale(num_output_channels=1), transforms.ToTensor(),transforms.Lambda(lambda x: x * intensity)]
+        [transforms.ToTensor(),transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),transforms.ToPILImage(mode=None),
+        transforms.Grayscale(num_output_channels=1),transforms.ToTensor(),transforms.Lambda(lambda x: x * intensity)]
     ),
 )
 
