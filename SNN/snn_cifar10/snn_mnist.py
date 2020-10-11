@@ -65,7 +65,7 @@ update_interval = args.update_interval
 train = args.train
 plot = True
 gpu = args.gpu
-
+w = 28
 
 # Determines number of workers to use
 if n_workers == -1:
@@ -239,7 +239,7 @@ for epoch in range(n_epochs):
             print(type(square_weights))
             print(square_weights.shape)
             plt.matshow(square_weights)
-            save_path = '../../result/mnist/'
+            save_path = '../../result/MNIST/'
             plt.savefig(save_path + '{}_weights.jpg'.format(str(step)))
             plt.cla()
 
